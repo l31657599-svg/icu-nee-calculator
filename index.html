@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ICU血管活性药物NEE换算速查表</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            background: #f9fafb; 
+            padding: 16px;
+        }
+        .container { max-width: 700px; margin: 0 auto; }
+        
+        .header {
+            background: #1a56db;
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin-bottom: 16px;
+            color: white;
+        }
+        .header .title { font-size: 18px; font-weight: 700; }
+        .header .subtitle { font-size: 12px; opacity: 0.85; margin-top: 4px; }
+        
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 16px;
+            margin-bottom: 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+        .card-title { font-weight: 600; margin-bottom: 12px; font-size: 15px; }
+        
+        .weight-input {
+            border: 2px solid #1a56db;
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-size: 20px;
+            font-weight: 700;
+            width: 140px;
+            color: #1a56db;
+        }
+        .dose-input {
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            padding: 6px 10px;
+            width: 80px;
+            font-size: 16px;
+            text-align: right;
+        }
+        .unit { font-size: 14px; color: #6b7280; margin-left: 6px; }
+        
+        .drug-card {
+            border: 1.5px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 12px;
+            margin-bottom: 10px;
+            background: white;
+        }
+        .drug-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .drug-name { font-weight: 700; font-size: 14px; }
+        .drug-note { font-size: 11px; color: #9ca3af; margin-top: 2px; }
+        .input-group { display: flex; align-items: center; }
+        
+        .result-row {
+            margin-top: 8px;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .result-tag {
+            font-size: 12px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background: #f3f4f6;
+            color: #374151;
+        }
+        .result-tag.highlight { font-weight: 700; background: #dbeafe; color: #1e40af; }
+        
+        .total-card {
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+            background: white;
+        }
+        .total-value {
+            font-size: 36px;
+            font-weight: 800;
+            color: #6b7280;
+        }
+        .total-unit { font-size: 14px; font-weight: 400; margin-left: 6px; }
+        .level-tag {
+            display: inline-block;
+            color: white;
+            padding: 3px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 700;
+            margin-top: 8px;
+        }
+        
+        .disclaimer {
+            background: white;
+            border-radius: 10px;
+            padding: 12px;
+            font-size: 11px;
+            color: #9ca3af;
+        }
+        .warning { color: #e02424; margin-top: 4px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="title">ICU血管活性药物NEE换算速查表</div>
+            <div class="subtitle">基于Updated Norepinephrine Equivalence</div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">① 输入患者体重</div>
+            <input type="number" id="weight" placeholder="体重" class="weight-input" oninput="calculate()">
+            <span class="unit">kg</span>
+        </div>
+
+        <div class="card">
+            <div class="card-title">② 输入当前用药剂量</div>
+            <div id="drugs"></div>
+        </div>
+
+        <div class="total-card" id="totalCard">
+            <div class="card-title">③ 总NEE当量</div>
+            <div class="total-value" id="totalValue">—<span class="total-unit">µg/kg/min</span></div>
+            <div id="levelTag"></div>
+        </div>
+
+        <div class="disclaimer">
+            <div>换算系数来源：Updated "Norepinephrine Equivalent" score in intensive care</div>
+            <div class="warning">⚠️ 本表仅供临床参考，不替代医疗决策</div>
+        </div>
+    </div>
+
+    <script>
+        var drugs = [
+            {name: "重酒石酸去甲肾上腺素（中国）", unit: "mg/h", coef: 1, note: "2mg重酒石酸=1mg碱基", isChinese: true, color: "#1a56db"},
+            {name: "去甲肾上腺素（国外）", unit: "µg/kg/min", coef: 1, note: "基准药物", color: "#1a56db"},
+            {name: "肾上腺素", unit: "µg/kg/min", coef: 1, note: "系数×1", color: "#e02424"},
+            {name: "多巴胺", unit: "µg/kg/min", coef: 0.01, note: "系数×1/100", color: "#7e3af2"},
+            {name: "去氧肾上腺素", unit: "µg/kg/min", coef: 0.06, note: "系数×0.06", color: "#057a55"},
+            {name: "血管加压素", unit: "U/min", coef: 2.5, note: "系数×2.5", isVasopressin: true, color: "#c27803"},
+            {name: "血管紧张素II", unit: "ng/kg/min", coef: 0.0025, note: "系数×0.0025", isAngiotensin: true, color: "#e74694"},
+            {name: "特利加压素", unit: "µg/kg/min", coef: 10, note: "系数×10", color: "#ff5a1f"},
+            {name: "亚甲蓝", unit: "mg/kg/h", coef: 0.2, note: "系数×0.2", isMethyleneBlue: true, color: "#0694a2"},
+            {name: "间羟胺", unit: "µg/kg/min", coef: 0.125, note: "系数×1/8", color: "#6875f5"},
+            {name: "米多君", unit: "µg/kg/min", coef: 0.4, note: "系数×0.4", color: "#84cc16"}
+        ];
+
+        function init() {
+            var container = document.getElementById('drugs');
+            for (var i = 0; i < drugs.length; i++) {
+                var drug = drugs[i];
+                var div = document.createElement('div');
+                div.className = 'drug-card';
+                div.innerHTML = 
+                    '<div class="drug-header">' +
+                        '<div>' +
+                            '<div class="drug-name" style="color:' + drug.color + '">' + (drug.isChinese ? '🇨🇳 ' : '') + drug.name + '</div>' +
+                            '<div class="drug-note">' + drug.note + '</div>' +
+                        '</div>' +
+                        '<div class="input-group">' +
+                            '<input type="number" class="dose-input" id="dose' + i + '" placeholder="0" oninput="calculate()">' +
+                            '<span class="unit">' + drug.unit + '</span>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="result-row" id="result' + i + '"></div>';
+                container.appendChild(div);
+            }
+        }
+
+        function calcNEE(drug, dose, weight) {
+            var d = parseFloat(dose);
+            var w = parseFloat(weight);
+            if (!d || !w || w <= 0) return null;
+
+            if (drug.isChinese) {
+                return (d / 2 * 1000 / 60 / w);
+            }
+            if (drug.isVasopressin) return d * 2.5;
+            if (drug.isAngiotensin) return d * 0.0025;
+            if (drug.isMethyleneBlue) return d * 0.2;
+            return d * drug.coef;
+        }
+
+        function calcMgH(drug, dose, weight) {
+            var d = parseFloat(dose);
+            var w = parseFloat(weight);
+            if (!d || !w || w <= 0) return null;
+            if (drug.isChinese || drug.isVasopressin || drug.isAngiotensin || drug.isMethyleneBlue) return null;
+            return (d * w * 60 / 1000);
+        }
+
+        function calculate() {
+            var weight = document.getElementById('weight').value;
+            var w = parseFloat(weight);
+            
+            if (!w || w <= 0) {
+                document.getElementById('totalValue').innerHTML = '—<span class="total-unit">µg/kg/min</span>';
+                document.getElementById('levelTag').innerHTML = '';
+                document.getElementById('totalCard').style.borderColor = '#e5e7eb';
+                document.getElementById('totalValue').style.color = '#6b7280';
+                return;
+            }
+
+            var total = 0;
+            
+            for (var i = 0; i < drugs.length; i++) {
+                var drug = drugs[i];
+                var dose = document.getElementById('dose' + i).value;
+                var nee = calcNEE(drug, dose, weight);
+                var mgH = calcMgH(drug, dose, weight);
+                var resultDiv = document.getElementById('result' + i);
+                
+                if (nee !== null) {
+                    var html = '';
+                    if (drug.isChinese) {
+                        html += '<span class="result-tag">碱基: ' + (parseFloat(dose)/2*1000/60/w).toFixed(3) + ' µg/kg/min</span>';
+                    }
+                    if (mgH !== null) {
+                        html += '<span class="result-tag">' + mgH.toFixed(3) + ' mg/h</span>';
+                    }
+                    html += '<span class="result-tag highlight">NEE: ' + nee.toFixed(4) + ' µg/kg/min</span>';
+                    resultDiv.innerHTML = html;
+                    total += nee;
+                } else {
+                    resultDiv.innerHTML = '';
+                }
+            }
+
+            var level;
+            if (total < 0.1) level = {label: "轻度", color: "#057a55", bg: "#f3faf7"};
+            else if (total < 0.25) level = {label: "中度", color: "#c27803", bg: "#fdf6b2"};
+            else if (total < 0.5) level = {label: "重度", color: "#e02424", bg: "#fdf2f2"};
+            else level = {label: "极重度", color: "#771d1d", bg: "#fde8e8"};
+
+            document.getElementById('totalValue').innerHTML = total.toFixed(4) + '<span class="total-unit">µg/kg/min</span>';
+            document.getElementById('totalValue').style.color = level.color;
+            document.getElementById('totalCard').style.borderColor = level.color;
+            document.getElementById('totalCard').style.background = level.bg;
+            
+            if (total > 0) {
+                document.getElementById('levelTag').innerHTML = '<span class="level-tag" style="background:' + level.color + '">' + level.label + '休克</span>';
+            } else {
+                document.getElementById('levelTag').innerHTML = '';
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
