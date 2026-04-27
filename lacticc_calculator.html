@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
+    <title>ICU乳酸清除率计算器 | 动态监测与ScvO₂联合解读</title>
+    <!-- Chart.js CDN for dynamic trend chart -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, 'Segoe UI', 'Roboto', 'Helvetica Neue', sans-serif;
+            background: #f0f4f8;
+            margin: 0;
+            padding: 20px;
+            color: #1e2a3e;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 28px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.05);
+            overflow: hidden;
+            padding: 20px 24px 32px;
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin: 0 0 0.25rem 0;
+            background: linear-gradient(135deg, #0b3b5f, #1b6b8f);
+            background-clip: text;
+            -webkit-background-clip: text;
+            color: transparent;
+        }
+
+        .sub {
+            color: #4a627a;
+            border-left: 4px solid #2c9b77;
+            padding-left: 16px;
+            margin: 10px 0 20px 0;
+            font-weight: 500;
+        }
+
+        /* 工具栏 */
+        .toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 24px;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 16px;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            background: #f1f5f9;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 40px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: 0.2s;
+            color: #0f3b5c;
+            border: 1px solid #cbd5e1;
+        }
+
+        button.primary {
+            background: #1e6f5c;
+            color: white;
+            border: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        button.primary:hover {
+            background: #0f5a4a;
+        }
+
+        button.danger {
+            background: #fff0f0;
+            border-color: #f3b3b3;
+            color: #b91c1c;
+        }
+
+        button.danger:hover {
+            background: #fcd9d9;
+        }
+
+        button:hover {
+            background: #e2e8f0;
+            transform: translateY(-1px);
+        }
+
+        /* 表格区域响应式滚动 */
+        .table-wrapper {
+            overflow-x: auto;
+            border-radius: 20px;
+            border: 1px solid #e9edf2;
+            background: white;
+            margin-bottom: 28px;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+            min-width: 720px;
+        }
+
+        .data-table th {
+            background: #f8fafc;
+            padding: 14px 10px;
+            text-align: center;
+            font-weight: 700;
+            color: #1e4a6e;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 0.85rem;
+        }
+
+        .data-table td {
+            padding: 12px 8px;
+            text-align: center;
+            border-bottom: 1px solid #f0f2f5;
+            vertical-align: middle;
+        }
+
+        .data-table input {
+            width: 100px;
+            padding: 8px 6px;
+            border-radius: 12px;
+            border: 1px solid #cbd5e1;
+            text-align: center;
+            font-size: 0.85rem;
+            font-family: inherit;
+            transition: 0.1s;
+        }
+
+        .data-table input:focus {
+            outline: none;
+            border-color: #2c9b77;
+            box-shadow: 0 0 0 2px rgba(44,155,119,0.2);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 30px;
+            font-weight: 600;
+            font-size: 0.75rem;
+            background: #eef2ff;
+            color: #1e3a8a;
+        }
+
+        .risk-green {
+            background: #dcfce7;
+            color: #166534;
+        }
+        .risk-yellow {
+            background: #fef9c3;
+            color: #854d0e;
+        }
+        .risk-red {
+            background: #fee2e2;
+            color: #b91c1c;
+        }
+
+        .delete-btn {
+            background: none;
+            border: none;
+            font-size: 1.25rem;
+            cursor: pointer;
+            color: #9ca3af;
+            padding: 4px 8px;
+            border-radius: 30px;
+        }
+        .delete-btn:hover {
+            color: #dc2626;
+            background: #fee2e2;
+        }
+
+        /* 联合解读文字 */
+        .interpret-cell {
+            max-width: 200px;
+            font-size: 0.75rem;
+            line-height: 1.35;
+            text-align: left;
+            font-weight: 500;
+        }
+
+        /* 趋势图容器 */
+        .chart-container {
+            margin: 24px 0 28px;
+            background: #ffffff;
+            border-radius: 24px;
+            padding: 16px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+            border: 1px solid #eef2f6;
+        }
+
+        canvas {
+            max-height: 360px;
+            width: 100%;
+        }
+
+        /* 提示卡片 */
+        .info-card {
+            background: #fefce8;
+            border-left: 5px solid #eab308;
+            padding: 16px 20px;
+            border-radius: 20px;
+            margin-top: 24px;
+            font-size: 0.85rem;
+        }
+
+        .info-card h4 {
+            margin: 0 0 8px 0;
+            color: #a16207;
+        }
+
+        .grid-tips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            justify-content: space-between;
+            margin-top: 20px;
+        }
+
+        .tip-box {
+            flex: 1;
+            background: #f9fafb;
+            padding: 14px;
+            border-radius: 18px;
+            font-size: 0.8rem;
+        }
+
+        hr {
+            margin: 24px 0 12px;
+            border-color: #e9edf2;
+        }
+
+        footer {
+            text-align: center;
+            font-size: 0.7rem;
+            color: #6c86a3;
+            margin-top: 28px;
+        }
+
+        @media (max-width: 700px) {
+            .container {
+                padding: 16px;
+            }
+            .data-table th, .data-table td {
+                padding: 8px 4px;
+            }
+            .data-table input {
+                width: 75px;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>📉 乳酸清除率 · 动态监测仪</h1>
+    <div class="sub">联合 ScvO₂ 评估复苏质量 | 组织灌注趋势分析 | 自动记忆数据</div>
+
+    <div class="toolbar">
+        <div class="btn-group">
+            <button id="addRowBtn" class="primary">+ 添加监测点 (时间点)</button>
+            <button id="resetExampleBtn">📋 载入示例数据</button>
+            <button id="clearAllBtn" class="danger">🗑️ 清空全部数据</button>
+        </div>
+        <div class="btn-group">
+            <span style="font-size:0.75rem; background:#eef2ff; padding:6px 12px; border-radius:40px;">💾 自动保存至本地</span>
+        </div>
+    </div>
+
+    <!-- 动态数据表格：行内编辑，支持删除和实时计算 -->
+    <div class="table-wrapper">
+        <table class="data-table" id="monitorTable">
+            <thead>
+                <tr>
+                    <th>时间点<br><span style="font-weight:normal">(例如 T₀, 2h)</span></th>
+                    <th>距初始时间(h)<br><span style="font-weight:normal">基线须为0</span></th>
+                    <th>乳酸<br>(mmol/L)</th>
+                    <th>ScvO₂<br>(%)</th>
+                    <th>乳酸清除率<br>(较基线)</th>
+                    <th>风险分级</th>
+                    <th>联合解读 (清除率+ScvO₂)</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody">
+                <!-- 动态渲染js -->
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 动态趋势图 -->
+    <div class="chart-container">
+        <div style="font-weight: 700; margin-bottom: 12px;">📈 动态趋势图 &nbsp; <span style="font-size:0.7rem;">乳酸(mmol/L) · ScvO₂(%)</span></div>
+        <canvas id="trendChart" width="800" height="350" style="max-height:350px"></canvas>
+        <div style="font-size:0.7rem; text-align:center; margin-top:8px;">横坐标: 距初始时间(小时) | 蓝色折线: 乳酸 (左轴) &nbsp;|&nbsp; 橙色折线: ScvO₂ (右轴)</div>
+    </div>
+
+    <!-- 快速临床解读与陷阱提醒 -->
+    <div class="info-card">
+        <h4>⚠️ 重要临床解读 · 乳酸清除率陷阱</h4>
+        <ul style="margin:6px 0 0 20px; padding-left:0;">
+            <li>🔹 清除率 &gt;30% + ScvO₂ 65-80% → ✅ 复苏方向正确，组织灌注改善</li>
+            <li>🔹 清除率 &lt;10% + ScvO₂ &lt;65% → ❌ 低灌注，继续优化容量/升压/输血</li>
+            <li>🔹 清除率 &lt;10% + ScvO₂ &gt;80% → ⚠️ 警惕线粒体功能障碍 / 微循环分流 / 脓毒症心肌病</li>
+            <li>🔹 清除率 10-30% + ScvO₂ 正常/偏低 → 🟡 中等效果，需严密监测或优化</li>
+            <li>📌 陷阱提醒：肝功能障碍导致乳酸清除下降、碳酸氢钠假性升高、脓毒症线粒体障碍、D-乳酸未检出等。<br>
+            📚 参考：SSC 2021, Rivers 2001 (EGDT), Jansen 2010。本工具仅供临床辅助，不能替代医生判断。</li>
+        </ul>
+    </div>
+
+    <div class="grid-tips">
+        <div class="tip-box"><strong>💡 自动记忆功能</strong><br>所有输入的数据会自动保存在浏览器中，下一次打开页面无需重新录入。</div>
+        <div class="tip-box"><strong>🧪 乳酸清除率公式</strong><br>清除率(%) = (基线乳酸 - 当前乳酸) / 基线乳酸 × 100%<br>负值代表乳酸继续升高，提示恶化。</div>
+        <div class="tip-box"><strong>🩸 ScvO₂ 联合解读</strong><br>目标范围65-80%，过低提示氧供不足，过高(>80%)合并低清除率警惕氧利用障碍。</div>
+    </div>
+    <footer>ICU 乳酸动态监测 · 清除率自动计算 | 数据存储在本地，刷新页面不丢失</footer>
+</div>
+
+<script>
+    // ----- 存储Key -----
+    const STORAGE_KEY = "icu_lactate_clearance_data";
+
+    // 示例数据 (符合临床情境)
+    const exampleData = [
+        { id: "row_0", name: "T₀ (入ICU)", hours: 0, lactate: 4.2, scvO2: 58 },
+        { id: "row_1", name: "2h", hours: 2, lactate: 3.0, scvO2: 66 },
+        { id: "row_2", name: "4h", hours: 4, lactate: 2.5, scvO2: 70 },
+        { id: "row_3", name: "6h", hours: 6, lactate: 2.0, scvO2: 72 },
+        { id: "row_4", name: "12h", hours: 12, lactate: 1.6, scvO2: 74 }
+    ];
+
+    let currentRows = [];     // 存储行对象
+    let chartInstance = null; // Chart.js 实例
+
+    // ----- 辅助函数：生成简短ID -----
+    function generateId() {
+        return Date.now() + '-' + Math.random().toString(36).substr(2, 6);
+    }
+
+    // ----- 计算乳酸清除率 (基于基线0h时的乳酸值)-----
+    function calculateClearance(baseLactate, currentLactate) {
+        if (baseLactate === null || baseLactate === undefined || baseLactate <= 0) return null;
+        if (currentLactate === undefined || currentLactate === "") return null;
+        let lacVal = parseFloat(currentLactate);
+        if (isNaN(lacVal)) return null;
+        let baseVal = parseFloat(baseLactate);
+        if (isNaN(baseVal) || baseVal === 0) return null;
+        let clearance = ((baseVal - lacVal) / baseVal) * 100;
+        return Math.round(clearance * 10) / 10; // 保留一位小数
+    }
+
+    // 风险分级名称和样式class
+    function getRiskLevel(clearance) {
+        if (clearance === null || isNaN(clearance)) return { text: "—", className: "" };
+        if (clearance > 30) return { text: "良好 ✅", className: "risk-green" };
+        if (clearance >= 10 && clearance <= 30) return { text: "观察 🟡", className: "risk-yellow" };
+        return { text: "危险 ❌", className: "risk-red" };
+    }
+
+    // 联合解读：基于清除率和当前ScvO₂ (依据临床逻辑优化)
+    function getCombinedInterpretation(clearance, scvO2Val) {
+        if (clearance === null || isNaN(clearance)) return "—";
+        if (scvO2Val === undefined || scvO2Val === "" || isNaN(scvO2Val)) return "需ScvO₂数值";
+        const clearVal = clearance;
+        const scv = parseFloat(scvO2Val);
+        // 类别定义
+        const isHighClear = clearVal > 30;
+        const isMidClear = clearVal >= 10 && clearVal <= 30;
+        const isLowClear = clearVal < 10;
+        const isScvLow = scv < 65;
+        const isScvNormal = scv >= 65 && scv <= 80;
+        const isScvHigh = scv > 80;
+
+        if (isHighClear && isScvNormal) return "✅ 复苏方向正确，灌注改善";
+        if (isHighClear && isScvLow) return "⚠️ 乳酸清除良好但ScvO₂偏低 → 评估贫血/心输出量";
+        if (isHighClear && isScvHigh) return "⚡ 高清除率伴ScvO₂过高，排除氧利用障碍/微循环";
+        if (isMidClear && isScvLow) return "🟡 清除率中等+ScvO₂低 → 继续优化氧供 (补液/升压)";
+        if (isMidClear && isScvNormal) return "📈 中等清除率，ScvO₂正常 → 持续复苏监测";
+        if (isMidClear && isScvHigh) return "🔍 清除率偏低+ScvO₂升高 → 警惕线粒体功能异常";
+        if (isLowClear && isScvLow) return "❌ 低清除率+低ScvO₂ → 严重低灌注，紧急升级治疗(CRRT/ECMO?)";
+        if (isLowClear && (isScvNormal || isScvHigh)) return "⚠️ 乳酸清除极差且ScvO₂不低 → 脓毒症心肌病/微循环障碍";
+        if (clearVal < 0) return "📉 乳酸较基线升高，灌注恶化，立即干预";
+        return "⏳ 动态评估中, 结合临床决策";
+    }
+
+    // 获取基线乳酸 (小时数===0的那一行)
+    function getBaselineLactate() {
+        const baselineRow = currentRows.find(row => row.hours === 0);
+        if (baselineRow && baselineRow.lactate !== undefined && baselineRow.lactate !== "") {
+            let val = parseFloat(baselineRow.lactate);
+            return isNaN(val) ? null : val;
+        }
+        return null;
+    }
+
+    // 刷新整个表格渲染 + 存储 + 图表
+    function renderTableAndChart() {
+        const tbody = document.getElementById('tableBody');
+        if (!tbody) return;
+        const baseLact = getBaselineLactate();
+        // 按照 hours 升序排序 (基线0小时在首位)
+        const sortedRows = [...currentRows].sort((a,b) => (a.hours || 0) - (b.hours || 0));
+        tbody.innerHTML = '';
+        for (let i = 0; i < sortedRows.length; i++) {
+            const row = sortedRows[i];
+            const isBaseline = (row.hours === 0);
+            const lactateVal = (row.lactate !== undefined && row.lactate !== "") ? parseFloat(row.lactate) : null;
+            const scvVal = (row.scvO2 !== undefined && row.scvO2 !== "") ? parseFloat(row.scvO2) : null;
+            let clearance = null;
+            let risk = { text: "—", className: "" };
+            let interpretation = "—";
+            if (!isBaseline && baseLact !== null && lactateVal !== null && !isNaN(lactateVal)) {
+                clearance = calculateClearance(baseLact, lactateVal);
+                risk = getRiskLevel(clearance);
+                interpretation = getCombinedInterpretation(clearance, scvVal);
+            } else if (isBaseline) {
+                interpretation = "基线参考点";
+                risk = { text: "基线", className: "" };
+            } else {
+                if (baseLact === null) interpretation = "等待设置基线(0h)乳酸";
+                else interpretation = "缺少乳酸值";
+            }
+            // 避免清除率展示NaN
+            const clearanceShow = (clearance !== null && !isNaN(clearance)) ? clearance + '%' : (isBaseline ? '—' : '无效');
+            
+            // 构建行
+            const tr = document.createElement('tr');
+            // 时间点名称 (可编辑input)
+            const tdName = document.createElement('td');
+            const nameInput = document.createElement('input');
+            nameInput.type = 'text';
+            nameInput.value = row.name || (isBaseline ? 'T₀' : '时间点');
+            nameInput.style.width = '90px';
+            nameInput.addEventListener('change', (e) => {
+                row.name = e.target.value;
+                saveToLocal();
+                // 不需要重绘全表？但要刷新显示，但保持排序不变，调用局部刷新会导致重新渲染表格保留focus？重新调用即可
+                renderTableAndChart();
+            });
+            tdName.appendChild(nameInput);
+            
+            // 小时数
+            const tdHours = document.createElement('td');
+            const hoursInput = document.createElement('input');
+            hoursInput.type = 'number';
+            hoursInput.step = '0.5';
+            hoursInput.value = row.hours;
+            hoursInput.style.width = '75px';
+            if (isBaseline) {
+                hoursInput.disabled = true;
+                hoursInput.style.background = '#f3f4f6';
+            } else {
+                hoursInput.disabled = false;
+            }
+            hoursInput.addEventListener('change', (e) => {
+                let newHours = parseFloat(e.target.value);
+                if (isNaN(newHours)) newHours = 0;
+                if (!isBaseline) {
+                    row.hours = newHours;
+                    saveToLocal();
+                    renderTableAndChart();
+                }
+            });
+            tdHours.appendChild(hoursInput);
+            
+            // 乳酸
+            const tdLac = document.createElement('td');
+            const lacInput = document.createElement('input');
+            lacInput.type = 'number';
+            lacInput.step = '0.1';
+            lacInput.value = (row.lactate !== undefined && row.lactate !== "") ? row.lactate : '';
+            lacInput.placeholder = 'mmol/L';
+            lacInput.addEventListener('change', (e) => {
+                let val = e.target.value;
+                if (val === "") row.lactate = undefined;
+                else row.lactate = parseFloat(val);
+                saveToLocal();
+                renderTableAndChart();
+            });
+            tdLac.appendChild(lacInput);
+            
+            // ScvO2
+            const tdScv = document.createElement('td');
+            const scvInput = document.createElement('input');
+            scvInput.type = 'number';
+            scvInput.step = '1';
+            scvInput.value = (row.scvO2 !== undefined && row.scvO2 !== "") ? row.scvO2 : '';
+            scvInput.placeholder = '%';
+            scvInput.addEventListener('change', (e) => {
+                let val = e.target.value;
+                if (val === "") row.scvO2 = undefined;
+                else row.scvO2 = parseFloat(val);
+                saveToLocal();
+                renderTableAndChart();
+            });
+            tdScv.appendChild(scvInput);
+            
+            // 清除率
+            const tdClear = document.createElement('td');
+            tdClear.innerText = clearanceShow;
+            
+            // 风险分级
+            const tdRisk = document.createElement('td');
+            const spanRisk = document.createElement('span');
+            spanRisk.className = `badge ${risk.className}`;
+            spanRisk.innerText = risk.text;
+            tdRisk.appendChild(spanRisk);
+            
+            // 联合解读
+            const tdInterpret = document.createElement('td');
+            tdInterpret.className = 'interpret-cell';
+            tdInterpret.innerText = interpretation;
+            
+            // 操作按钮
+            const tdAction = document.createElement('td');
+            if (!isBaseline) {
+                const delBtn = document.createElement('button');
+                delBtn.innerText = '🗑️';
+                delBtn.className = 'delete-btn';
+                delBtn.title = '删除监测点';
+                delBtn.addEventListener('click', () => {
+                    // 删除当前行
+                    const index = currentRows.findIndex(r => r.id === row.id);
+                    if (index !== -1) currentRows.splice(index, 1);
+                    saveToLocal();
+                    renderTableAndChart();
+                });
+                tdAction.appendChild(delBtn);
+            } else {
+                tdAction.innerText = '基线';
+                tdAction.style.fontSize = '0.7rem';
+                tdAction.style.color = '#6c86a3';
+            }
+            
+            tr.appendChild(tdName);
+            tr.appendChild(tdHours);
+            tr.appendChild(tdLac);
+            tr.appendChild(tdScv);
+            tr.appendChild(tdClear);
+            tr.appendChild(tdRisk);
+            tr.appendChild(tdInterpret);
+            tr.appendChild(tdAction);
+            tbody.appendChild(tr);
+        }
+        // 每次渲染完更新图表以及保存（保存已经调用过了，再保险）
+        updateTrendChart();
+        saveToLocal(); // 确保存入最新rows状态
+    }
+    
+    // 更新趋势图 (基于排序后的数据，横轴hours，乳酸左轴，ScvO2右轴)
+    function updateTrendChart() {
+        if (!chartInstance && document.getElementById('trendChart')) {
+            const ctx = document.getElementById('trendChart').getContext('2d');
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: { datasets: [] },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: { tooltip: { mode: 'index', intersect: false } },
+                    scales: {
+                        y: { title: { display: true, text: '乳酸 (mmol/L)', color: '#1e6f5c' }, beginAtZero: true, grid: { color: '#e2e8f0' } },
+                        y1: { position: 'right', title: { display: true, text: 'ScvO₂ (%)', color: '#d97706' }, min: 20, max: 100, grid: { drawOnChartArea: false } }
+                    }
+                }
+            });
+        }
+        if (!chartInstance) return;
+        // 获取有效行并按小时排序
+        const sorted = [...currentRows].sort((a,b) => (a.hours||0) - (b.hours||0));
+        const hours = sorted.map(r => r.hours);
+        const lactateVals = sorted.map(r => (r.lactate !== undefined && r.lactate !== "" && !isNaN(parseFloat(r.lactate))) ? parseFloat(r.lactate) : null);
+        const scvVals = sorted.map(r => (r.scvO2 !== undefined && r.scvO2 !== "" && !isNaN(parseFloat(r.scvO2))) ? parseFloat(r.scvO2) : null);
+        
+        chartInstance.data.labels = hours;
+        chartInstance.data.datasets = [
+            {
+                label: '乳酸 (mmol/L)',
+                data: lactateVals,
+                borderColor: '#1e6f5c',
+                backgroundColor: 'transparent',
+                tension: 0.2,
+                borderWidth: 2.5,
+                pointRadius: 4,
+                pointBackgroundColor: '#1e6f5c',
+                yAxisID: 'y',
+            },
+            {
+                label: 'ScvO₂ (%)',
+                data: scvVals,
+                borderColor: '#f59e0b',
+                backgroundColor: 'transparent',
+                borderWidth: 2,
+                tension: 0.2,
+                pointRadius: 3,
+                pointBackgroundColor: '#f59e0b',
+                yAxisID: 'y1',
+            }
+        ];
+        chartInstance.update();
+    }
+    
+    // 保存至localStorage
+    function saveToLocal() {
+        try {
+            // 保存前清理无关字段，确保可序列化
+            const toStore = currentRows.map(row => ({
+                id: row.id,
+                name: row.name,
+                hours: row.hours,
+                lactate: row.lactate,
+                scvO2: row.scvO2
+            }));
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(toStore));
+        } catch(e) { console.warn(e); }
+    }
+    
+    // 加载存储或初始化
+    function loadFromLocal() {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) {
+            try {
+                const parsed = JSON.parse(stored);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    // 确保每个对象都有id和基本字段, 且小时数0的行必须至少有一行基线，如果没有0h基线则补一个基线
+                    currentRows = parsed;
+                    const hasBaseline = currentRows.some(r => r.hours === 0);
+                    if (!hasBaseline) {
+                        // 添加默认基线行
+                        currentRows.unshift({
+                            id: generateId(),
+                            name: "T₀ (基线)",
+                            hours: 0,
+                            lactate: 3.8,
+                            scvO2: 60,
+                        });
+                    }
+                    // 修复缺失字段
+                    currentRows.forEach(row => {
+                        if (!row.hasOwnProperty('lactate')) row.lactate = undefined;
+                        if (!row.hasOwnProperty('scvO2')) row.scvO2 = undefined;
+                        if (!row.name) row.name = (row.hours === 0 ? '基线' : '监测点');
+                    });
+                    renderTableAndChart();
+                    return;
+                }
+            } catch(e) { console.warn(e); }
+        }
+        // 无数据: 加载示例数据并且确保基线存在
+        currentRows = JSON.parse(JSON.stringify(exampleData));
+        // 确保id都拥有
+        currentRows = currentRows.map(r => ({ ...r, id: generateId() }));
+        renderTableAndChart();
+    }
+    
+    // 增加新行 (非基线小时数非0且时间点)
+    function addNewRow() {
+        // 寻找最大小时数建议自动偏移
+        let maxHour = 0;
+        for (let r of currentRows) { if (r.hours > maxHour) maxHour = r.hours; }
+        let newHour = maxHour + 2;
+        // 避免重复小时可允许
+        const newId = generateId();
+        const newRow = {
+            id: newId,
+            name: `${newHour}h`,
+            hours: newHour,
+            lactate: undefined,
+            scvO2: undefined,
+        };
+        currentRows.push(newRow);
+        saveToLocal();
+        renderTableAndChart();
+    }
+    
+    // 重置示例 (清空后加载预设)
+    function resetToExample() {
+        currentRows = JSON.parse(JSON.stringify(exampleData)).map(r => ({ ...r, id: generateId() }));
+        renderTableAndChart();
+    }
+    
+    // 清空所有保留基线 (仅保留一个干净基线行)
+    function clearAllData() {
+        // 保留必须基线行 (小时=0)
+        const cleanBaseline = {
+            id: generateId(),
+            name: "T₀ (基线)",
+            hours: 0,
+            lactate: undefined,
+            scvO2: undefined,
+        };
+        currentRows = [cleanBaseline];
+        renderTableAndChart();
+    }
+    
+    // 设置事件监听
+    document.getElementById('addRowBtn')?.addEventListener('click', addNewRow);
+    document.getElementById('resetExampleBtn')?.addEventListener('click', resetToExample);
+    document.getElementById('clearAllBtn')?.addEventListener('click', clearAllData);
+    
+    // 启动
+    loadFromLocal();
+</script>
+</body>
+</html>
